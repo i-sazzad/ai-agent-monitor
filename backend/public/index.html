@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Agent Monitor</title>
+  <script src="/chart.min.js"></script>
+  <style>
+    :root{
+      --bg:#0b0d12;--surface:#111520;--surface2:#161b27;--border:#1e2535;
+      --fg:#dde3f0;--muted:#5a6380;--accent:#4f8ef7;--accent2:#7b5ef7;
+      --green:#34d399;--orange:#fb923c;--red:#f87171;--yellow:#fbbf24;
+      --purple:#a78bfa;--cyan:#22d3ee;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font:13px/1.5 "Inter",system-ui,sans-serif;background:var(--bg);color:var(--fg);min-height:100vh;}
+
+    /* ── layout ── */
+    header{display:flex;align-items:center;gap:10px;padding:12px 20px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:100;}
+    header h1{font-size:14px;font-weight:700;letter-spacing:-.02em;white-space:nowrap;}
+    header .tagline{font-size:11px;color:var(--muted);}
+    .hright{margin-left:auto;display:flex;align-items:center;gap:8px;}
+    .banner{background:#1a1206;color:#c8972a;font-size:11px;padding:6px 20px;border-bottom:1px solid var(--border);}
+    main{padding:16px 20px;max-width:1400px;margin:0 auto;}
+
+    /* ── filter bar ── */
+    .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:16px;}
+    .fg{display:flex;flex-direction:column;gap:4px;}
+    .fg label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);}
+    .filters input[type=date],.filters select{height:32px;padding:0 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--fg);font:13px/1 inherit;outline:none;}
+    .filters input[type=date]:focus,.filters select:focus{border-color:var(--accent);}
+    .coder-dd{position:relative;}
+    .coder-btn{height:32px;padding:0 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--fg);cursor:pointer;font:13px/1 inherit;white-space:nowrap;min-width:130px;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:6px;}
+    .coder-btn:after{content:"▾";font-size:10px;color:var(--muted);}
+    .coder-panel{display:none;position:absolute;top:36px;left:0;z-index:200;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px;min-width:170px;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px #0007;}
+    .coder-panel.open{display:block;}
+    .coder-panel label{display:flex;align-items:center;gap:7px;padding:5px 6px;border-radius:5px;cursor:pointer;font-size:12px;}
+    .coder-panel label:hover{background:var(--border);}
+    .sep{width:1px;height:32px;background:var(--border);}
+    .btn{height:32px;padding:0 14px;border-radius:6px;border:none;cursor:pointer;font:600 12px/1 inherit;}
+    .btn-primary{background:var(--accent);color:#fff;}
+    .btn-ghost{background:var(--surface2);color:var(--muted);border:1px solid var(--border);}
+    .btn-danger{background:#1e0f0f;color:var(--red);border:1px solid #3a1515;}
+    .filter-tag{display:inline-flex;align-items:center;gap:4px;background:#1a2040;color:var(--accent);border:1px solid #2a3560;border-radius:999px;font-size:11px;padding:2px 8px;}
+
+    /* ── KPI cards ── */
+    .kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:16px;}
+    .kpi{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;position:relative;overflow:hidden;}
+    .kpi::before{content:'';position:absolute;inset:0;opacity:.04;border-radius:10px;}
+    .kpi.c-blue::before{background:var(--accent);}
+    .kpi.c-green::before{background:var(--green);}
+    .kpi.c-orange::before{background:var(--orange);}
+    .kpi.c-purple::before{background:var(--purple);}
+    .kpi.c-cyan::before{background:var(--cyan);}
+    .kpi .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:6px;}
+    .kpi .val{font-size:24px;font-weight:700;line-height:1;}
+    .kpi.c-blue .val{color:var(--accent);}
+    .kpi.c-green .val{color:var(--green);}
+    .kpi.c-orange .val{color:var(--orange);}
+    .kpi.c-purple .val{color:var(--purple);}
+    .kpi.c-cyan .val{color:var(--cyan);}
+    .kpi .sub{font-size:10px;color:var(--muted);margin-top:4px;}
+
+    /* ── chart grid ── */
+    .chart-full{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:12px;}
+    .chart-grid-3{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px;margin-bottom:12px;}
+    .chart-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;}
+    .chart-box{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;}
+    .ch{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+    .chart-box canvas,.chart-full canvas{max-height:200px;}
+    .chart-full canvas{max-height:180px;}
+
+    /* ── tables ── */
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:12px;}
+    .card-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+    .card-head h2{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;}
+    .tbl-wrap{overflow-x:auto;}
+    table{width:100%;border-collapse:collapse;}
+    th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--border);font-size:12px;white-space:nowrap;}
+    th{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:500;}
+    tr.row:hover{background:var(--surface2);cursor:pointer;}
+    tr.total-row{background:#0f1320;font-weight:600;}
+    .r{text-align:right;}
+
+    /* ── pills / badges ── */
+    .pill{display:inline-block;padding:1px 7px;border-radius:999px;font-size:11px;}
+    .pill-blue{background:#0e1d3a;color:var(--accent);}
+    .pill-green{background:#0a2018;color:var(--green);}
+    .pill-orange{background:#201208;color:var(--orange);}
+    .pill-red{background:#200a0a;color:var(--red);}
+    .pill-purple{background:#160d2a;color:var(--purple);}
+    .pill-muted{background:#151a25;color:var(--muted);}
+    .warn{color:var(--orange);font-weight:700;}
+
+    /* ── auth ── */
+    #loginWrap{max-width:400px;margin:80px auto;}
+    .login-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px 24px;}
+    .login-card h2{font-size:16px;font-weight:700;margin-bottom:6px;}
+    .login-card p{font-size:12px;color:var(--muted);margin-bottom:18px;}
+    .login-row{display:flex;gap:8px;}
+    .login-row input{flex:1;height:36px;padding:0 10px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--fg);font:13px inherit;outline:none;}
+    .login-row input:focus{border-color:var(--accent);}
+    .login-row .btn-primary{height:36px;padding:0 18px;}
+    .err{color:var(--red);font-size:12px;min-height:18px;margin-top:8px;}
+
+    /* ── drill-down ── */
+    .drill-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:11px;color:var(--muted);margin-bottom:6px;}
+    pre{white-space:pre-wrap;word-break:break-word;background:#070910;border:1px solid var(--border);border-radius:7px;padding:10px 12px;font-size:12px;font-family:ui-monospace,monospace;margin-top:4px;}
+    .drill-item{padding:10px 0;border-bottom:1px solid var(--border);}
+    .drill-item:last-child{border-bottom:none;}
+
+    /* ── usage limit bars ── */
+    .limits-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;}
+    .limit-coder{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;}
+    .limit-coder .lc-name{font-size:12px;font-weight:600;margin-bottom:10px;color:var(--fg);}
+    .bar-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+    .bar-row .bar-lbl{font-size:10px;color:var(--muted);width:120px;flex-shrink:0;}
+    .bar-track{flex:1;height:8px;background:#1a2035;border-radius:999px;overflow:hidden;}
+    .bar-fill{height:100%;border-radius:999px;transition:width .4s ease;}
+    .bar-pct{font-size:10px;width:36px;text-align:right;flex-shrink:0;}
+    .bar-green{background:var(--green);}
+    .bar-orange{background:var(--orange);}
+    .bar-red{background:var(--red);}
+    .limits-note{font-size:11px;color:var(--muted);margin-top:8px;}
+
+    .hidden{display:none!important;}
+    .spin{animation:spin 1s linear infinite;display:inline-block;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+
+    /* ── responsive ── */
+    @media(max-width:900px){
+      .kpis{grid-template-columns:repeat(3,1fr);}
+      .chart-grid-3,.chart-grid-2{grid-template-columns:1fr;}
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <span style="font-size:18px">🔭</span>
+  <h1>Agent Monitor</h1>
+  <span class="tagline">monitoring only · no flags · no scores</span>
+  <div class="hright">
+    <span id="lastRefresh" style="font-size:11px;color:var(--muted)"></span>
+    <button id="refreshBtn" class="btn btn-ghost hidden" onclick="applyFilters()">↺ Refresh</button>
+    <button id="logoutBtn" class="btn btn-danger hidden" onclick="doLogout()">Log out</button>
+  </div>
+</header>
+
+<div class="banner">⚠ Monitoring active — prompts are redacted before storage, all drill-down access is logged. For aggregate usage/cost review only; never used to flag or penalise.</div>
+
+<main>
+
+  <!-- LOGIN -->
+  <div id="loginWrap">
+    <div class="login-card">
+      <h2>Sign in</h2>
+      <p>Admin token — replace with company SSO in production.</p>
+      <div class="login-row">
+        <input id="tokenInput" type="password" placeholder="Admin token" onkeydown="if(event.key==='Enter')doLogin()"/>
+        <button class="btn btn-primary" onclick="doLogin()">Sign in</button>
+      </div>
+      <div class="err" id="loginErr"></div>
+    </div>
+  </div>
+
+  <!-- APP -->
+  <div id="app" class="hidden">
+
+    <!-- FILTER BAR -->
+    <div class="filters" id="filterBar">
+      <div class="fg">
+        <label>From</label>
+        <input type="date" id="fFrom"/>
+      </div>
+      <div class="fg">
+        <label>To</label>
+        <input type="date" id="fTo"/>
+      </div>
+      <div class="sep"></div>
+      <div class="fg">
+        <label>Coders</label>
+        <div class="coder-dd" id="coderDd">
+          <button class="coder-btn" onclick="toggleCoderPanel(event)" id="coderBtnLbl">All coders</button>
+          <div class="coder-panel" id="coderPanel">
+            <label><input type="checkbox" id="ckAll" checked onchange="toggleAllCoders(this)"/> <strong>All coders</strong></label>
+            <div id="coderChecks"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sep"></div>
+      <button class="btn btn-primary" onclick="applyFilters()">Apply filters</button>
+      <button class="btn btn-ghost" onclick="resetFilters()">Reset</button>
+      <div id="activeTags" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>
+    </div>
+
+    <!-- KPI CARDS -->
+    <div class="kpis">
+      <div class="kpi c-blue"><div class="lbl">Active coders</div><div class="val" id="kCoders">—</div><div class="sub">machines reporting</div></div>
+      <div class="kpi c-green" style="border-color:#34d39940"><div class="lbl">Projects</div><div class="val" id="kProjects" style="color:#2dd4bf">—</div><div class="sub">distinct workspaces</div></div>
+      <div class="kpi c-green"><div class="lbl">Total sessions</div><div class="val" id="kSessions">—</div><div class="sub" id="kSessionsSub">conversations</div></div>
+      <div class="kpi c-purple"><div class="lbl">Input tokens</div><div class="val" id="kTokensIn">—</div><div class="sub">across all coders</div></div>
+      <div class="kpi c-orange"><div class="lbl">Output tokens</div><div class="val" id="kTokensOut">—</div><div class="sub">across all coders</div></div>
+      <div class="kpi c-cyan"><div class="lbl">Simple → Opus</div><div class="val" id="kMisuse">—</div><div class="sub">model mismatch signal</div></div>
+    </div>
+
+    <!-- ACTIVITY TIMELINE (full width) -->
+    <div class="chart-full">
+      <div class="ch">📈 Activity over time — daily sessions &amp; tokens</div>
+      <canvas id="cTimeline"></canvas>
+    </div>
+
+    <!-- CHARTS ROW 1 -->
+    <div class="chart-grid-3">
+      <div class="chart-box"><div class="ch">📊 Token spend by coder</div><canvas id="cCoderTokens"></canvas></div>
+      <div class="chart-box"><div class="ch">🤖 Model distribution</div><canvas id="cModels"></canvas></div>
+      <div class="chart-box"><div class="ch">🧩 Task complexity</div><canvas id="cComplexity"></canvas></div>
+    </div>
+
+    <!-- CHARTS ROW 2 -->
+    <div class="chart-grid-2">
+      <div class="chart-box"><div class="ch">⚡ Claude vs OpenCode sessions</div><canvas id="cAgents"></canvas></div>
+      <div class="chart-box"><div class="ch">🔢 Sessions by coder</div><canvas id="cCoderSessions"></canvas></div>
+    </div>
+
+    <!-- CODER TABLE -->
+    <div class="card">
+      <div class="card-head">
+        <h2>Usage by coder</h2>
+        <span class="pill pill-muted">click row → details & prompts</span>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th>Coder</th><th>Account</th><th class="r">Projects</th><th class="r">Sessions</th><th class="r">Prompts</th>
+            <th class="r">Claude</th><th class="r">OpenCode</th>
+            <th class="r">Input tok.</th><th class="r">Output tok.</th>
+            <th class="r">Simple→Opus</th><th>IPs</th>
+          </tr></thead>
+          <tbody id="coderTbody"></tbody>
+        </table>
+      </div>
+      <p style="font-size:11px;color:var(--muted);margin-top:8px">⚠ Simple→Opus: simple-classified prompts run on expensive Opus — descriptive cost signal only.</p>
+    </div>
+
+
+  </div><!-- /app -->
+</main>
+
+<script>
+// ── Config ───────────────────────────────────────────────────────────────────
+const RATES = {
+  'claude-opus-4-8':           [15,   75],
+  'claude-opus-4-7':           [15,   75],
+  'claude-fable-5':            [15,   75],
+  'claude-sonnet-4-6':         [ 3,   15],
+  'claude-sonnet-4-5':         [ 3,   15],
+  'claude-haiku-4-5-20251001': [ 1,    5],
+  'opencode':                  [ 0.3,  0.9],
+  'default':                   [ 3,   15],
+};
+const MODEL_CLR = {
+  'claude-opus-4-8':           '#a78bfa',
+  'claude-opus-4-7':           '#c084fc',
+  'claude-fable-5':            '#f472b6',
+  'claude-sonnet-4-6':         '#4f8ef7',
+  'claude-sonnet-4-5':         '#60a5fa',
+  'claude-haiku-4-5-20251001': '#34d399',
+  'opencode':                  '#fb923c',
+  'unknown':                   '#5a6380',
+};
+const TASK_CLR = { simple:'#34d399', moderate:'#4f8ef7', critical:'#f87171', unknown:'#5a6380' };
+
+Chart.defaults.color = '#5a6380';
+Chart.defaults.borderColor = '#1e2535';
+Chart.defaults.font.family = 'Inter,system-ui,sans-serif';
+Chart.defaults.font.size = 11;
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const $  = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+const rate = m => RATES[m] || RATES['default'];
+const cost = r => {
+  const [ri,ro] = rate(r.model ?? r.agent ?? 'default');
+  return (r.tokens_in||0)/1e6*ri + (r.tokens_out||0)/1e6*ro + (r.tokens_cache_read||0)/1e6*ri*0.1;
+};
+const fmt = n => n == null ? '0' : n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(0)+'k' : String(n);
+const fmtDate = s => s ? new Date(s).toLocaleString() : '';
+const shortModel = m => (m||'?').replace('claude-','').replace('-20251001','');
+const modelClr = m => MODEL_CLR[m] || '#5a6380';
+const pill = (t,cls='pill-muted') => `<span class="pill ${cls}">${t}</span>`;
+const esc = s => (s||'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+const projName = p => { if(!p) return '(unknown)'; const s=p.replace(/\\/g,'/'); return s.split('/').filter(Boolean).pop()||s; };
+
+// close coder dropdown on outside click
+document.addEventListener('click', e => {
+  if (!$('#coderDd').contains(e.target)) $('#coderPanel').classList.remove('open');
+});
+
+// ── Auth ─────────────────────────────────────────────────────────────────────
+async function apiFetch(path, opts) {
+  const r = await fetch(path, { credentials:'same-origin', ...opts });
+  if (r.status === 401) { showLogin(); throw new Error('unauthorized'); }
+  return r.json();
+}
+function showLogin() {
+  $('#loginWrap').classList.remove('hidden');
+  $('#app').classList.add('hidden');
+  $('#logoutBtn').classList.add('hidden');
+  $('#refreshBtn').classList.add('hidden');
+}
+function showApp() {
+  $('#loginWrap').classList.add('hidden');
+  $('#app').classList.remove('hidden');
+  $('#logoutBtn').classList.remove('hidden');
+  $('#refreshBtn').classList.remove('hidden');
+}
+async function doLogin() {
+  $('#loginErr').textContent = '';
+  const r = await fetch('/login', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ token: $('#tokenInput').value }), credentials:'same-origin' });
+  if (!r.ok) { $('#loginErr').textContent = 'Invalid token.'; return; }
+  $('#tokenInput').value = '';
+  showApp();
+  await initCoderList();
+  applyFilters();
+}
+async function doLogout() {
+  await fetch('/logout', { method:'POST', credentials:'same-origin' });
+  showLogin();
+}
+
+// ── Filter state ──────────────────────────────────────────────────────────────
+let _coders = [];   // all coders from server
+let _selCoders = new Set(); // empty = all
+
+function toggleCoderPanel(e) {
+  e.stopPropagation();
+  $('#coderPanel').classList.toggle('open');
+}
+function toggleAllCoders(cb) {
+  $$('#coderChecks input').forEach(c => { c.checked = cb.checked; });
+  updateCoderLabel();
+}
+function updateCoderLabel() {
+  const all  = [...$$('#coderChecks input')];
+  const sel  = all.filter(c => c.checked);
+  _selCoders = sel.length === all.length ? new Set() : new Set(sel.map(c => c.value));
+  const txt  = _selCoders.size === 0 ? 'All coders' : _selCoders.size === 1 ? [..._selCoders][0] : `${_selCoders.size} coders`;
+  $('#coderBtnLbl').childNodes[0].textContent = txt;
+  $('#ckAll').checked = _selCoders.size === 0;
+}
+
+async function initCoderList() {
+  const d = await apiFetch('/api/coders');
+  _coders = d.coders || [];
+  const box = $('#coderChecks');
+  box.innerHTML = '';
+  _coders.forEach(c => {
+    const lbl = document.createElement('label');
+    lbl.innerHTML = `<input type="checkbox" value="${esc(c)}" checked onchange="updateCoderLabel()"/> ${esc(c)}`;
+    box.appendChild(lbl);
+  });
+}
+
+// Default date range: today (local date)
+function localDateStr(d) {
+  return d.getFullYear() + '-' +
+    String(d.getMonth()+1).padStart(2,'0') + '-' +
+    String(d.getDate()).padStart(2,'0');
+}
+function setDefaultDates() {
+  const today = localDateStr(new Date());
+  $('#fTo').value   = today;
+  $('#fFrom').value = today;
+}
+function resetFilters() {
+  setDefaultDates();
+  $$('#coderChecks input').forEach(c => c.checked = true);
+  $('#ckAll').checked = true;
+  updateCoderLabel();
+  applyFilters();
+}
+
+function buildQS() {
+  const p = new URLSearchParams();
+  // Convert local calendar dates → UTC ISO so server comparisons are timezone-correct.
+  if ($('#fFrom').value) p.set('from', new Date($('#fFrom').value + 'T00:00:00').toISOString());
+  if ($('#fTo').value)   p.set('to',   new Date($('#fTo').value   + 'T23:59:59.999').toISOString());
+  if (_selCoders.size)   p.set('coders', [..._selCoders].join(','));
+  return p.toString() ? '?' + p.toString() : '';
+}
+
+function renderTags() {
+  const tags = [];
+  if ($('#fFrom').value) tags.push(`From: ${$('#fFrom').value}`);
+  if ($('#fTo').value)   tags.push(`To: ${$('#fTo').value}`);
+  if (_selCoders.size)   tags.push(`Coders: ${[..._selCoders].join(', ')}`);
+  $('#activeTags').innerHTML = tags.map(t => `<span class="filter-tag">${esc(t)}</span>`).join('');
+}
+
+// ── Data & render ─────────────────────────────────────────────────────────────
+let _charts = {};
+function mkChart(id, type, data, opts={}) {
+  if (_charts[id]) _charts[id].destroy();
+  _charts[id] = new Chart($('#' + id).getContext('2d'), {
+    type, data,
+    options:{ responsive:true, maintainAspectRatio:true, plugins:{ legend:{ labels:{ boxWidth:10, padding:10 } } }, ...opts }
+  });
+}
+
+let _report=null, _tokens=null, _activity=null, _complexity=null;
+
+async function applyFilters() {
+  renderTags();
+  const qs = buildQS();
+  [_report, _tokens, _activity, _complexity] = await Promise.all([
+    apiFetch('/api/report'     + qs),
+    apiFetch('/api/tokens'     + qs),
+    apiFetch('/api/activity'   + qs),
+    apiFetch('/api/complexity' + qs),
+  ]);
+  renderKPIs();
+  try { renderTimeline(); } catch(e) { console.error('timeline', e); }
+  try { renderCharts();   } catch(e) { console.error('charts', e); }
+  renderCoderTable();
+  $('#lastRefresh').textContent = 'Updated ' + new Date().toLocaleTimeString();
+}
+
+function renderKPIs() {
+  const coders  = _report.coders;
+  const total   = (k) => coders.reduce((s,c) => s+(c[k]||0), 0);
+  const sessions = total('sessions');
+  const prompts  = total('prompts');
+  const distinctProjects = new Set(coders.flatMap(c => c.projects || [])).size;
+  $('#kCoders').textContent    = coders.length;
+  $('#kProjects').textContent  = distinctProjects;
+  $('#kSessions').textContent  = sessions.toLocaleString();
+  $('#kSessionsSub').textContent = prompts.toLocaleString() + ' prompts total';
+  $('#kTokensIn').textContent  = fmt(total('tokens_in'));
+  $('#kTokensOut').textContent = fmt(total('tokens_out'));
+  $('#kMisuse').textContent    = total('simple_on_opus');
+}
+
+function renderTimeline() {
+  const rows = _activity.rows || [];
+  const labels = rows.map(r => r.date);
+  mkChart('cTimeline','line',{
+    labels,
+    datasets:[
+      { label:'Sessions', data:rows.map(r=>r.sessions), borderColor:'#4f8ef7', backgroundColor:'#4f8ef720', fill:true, tension:.3, yAxisID:'y', pointRadius:3 },
+      { label:'Input tokens (k)', data:rows.map(r=>Math.round((r.tokens_in||0)/1e3)), borderColor:'#a78bfa', backgroundColor:'transparent', tension:.3, yAxisID:'y2', pointRadius:2, borderDash:[4,3] },
+      { label:'Active coders', data:rows.map(r=>r.active_coders), borderColor:'#34d399', backgroundColor:'transparent', tension:.3, yAxisID:'y3', pointRadius:2 },
+    ]
+  },{
+    plugins:{ legend:{ position:'top' } },
+    scales:{
+      x:{ ticks:{ maxTicksLimit:12 } },
+      y:{ position:'left', title:{ display:true, text:'Sessions' } },
+      y2:{ position:'right', grid:{ drawOnChartArea:false }, title:{ display:true, text:'Tokens (k)' } },
+      y3:{ display:false },
+    }
+  });
+}
+
+function renderCharts() {
+  const coders    = _report.coders;
+  const tokenRows = _tokens.rows;
+
+  // token by coder (stacked)
+  mkChart('cCoderTokens','bar',{
+    labels: coders.map(c=>c.coder),
+    datasets:[
+      { label:'Input',  data:coders.map(c=>(c.tokens_in||0)/1e6),  backgroundColor:'#4f8ef7bb' },
+      { label:'Output', data:coders.map(c=>(c.tokens_out||0)/1e6), backgroundColor:'#a78bfabb' },
+    ]
+  },{ plugins:{legend:{position:'top'}}, scales:{ x:{stacked:true}, y:{stacked:true,title:{display:true,text:'M tokens'}} } });
+
+  // model donut
+  const mTot = {};
+  tokenRows.forEach(r=>{ mTot[r.model]=(mTot[r.model]||0)+(r.sessions||0); });
+  const mL = Object.keys(mTot);
+  mkChart('cModels','doughnut',{
+    labels: mL.map(shortModel),
+    datasets:[{ data:mL.map(k=>mTot[k]), backgroundColor:mL.map(modelClr), borderWidth:2, borderColor:'#111520' }]
+  },{ cutout:'62%', plugins:{ legend:{ position:'right' } } });
+
+  // complexity donut
+  const cxRows = _complexity.rows || [];
+  const cxL = ['simple','moderate','critical'];
+  const cxV = cxL.map(k => (cxRows.find(r=>r.task_class===k)||{sessions:0}).sessions);
+  mkChart('cComplexity','doughnut',{
+    labels:['Simple','Moderate','Critical'],
+    datasets:[{ data:cxV, backgroundColor:cxL.map(k=>TASK_CLR[k]), borderWidth:2, borderColor:'#111520' }]
+  },{ cutout:'62%', plugins:{ legend:{ position:'right' } } });
+
+  // agent grouped bar
+  mkChart('cAgents','bar',{
+    labels: coders.map(c=>c.coder),
+    datasets:[
+      { label:'Claude Code', data:coders.map(c=>c.claude||0), backgroundColor:'#4f8ef7bb', borderRadius:3 },
+      { label:'OpenCode',    data:coders.map(c=>c.opencode||0), backgroundColor:'#fb923cbb', borderRadius:3 },
+    ]
+  },{ plugins:{legend:{position:'top'}}, scales:{ y:{ticks:{stepSize:1}} } });
+
+  // sessions by coder (horiz bar)
+  const sorted = [...coders].sort((a,b)=>(b.sessions||0)-(a.sessions||0));
+  mkChart('cCoderSessions','bar',{
+    labels: sorted.map(c=>c.coder),
+    datasets:[{ label:'Sessions', data:sorted.map(c=>c.sessions||0), backgroundColor:sorted.map((_,i)=>`hsl(${200+i*40},65%,55%)`), borderRadius:4 }]
+  },{ indexAxis:'y', plugins:{legend:{display:false}}, scales:{ x:{title:{display:true,text:'Sessions'}} } });
+}
+
+function renderCoderTable() {
+  const coders = [..._report.coders].sort((a,b) => (b.sessions||0)-(a.sessions||0));
+  const tb = $('#coderTbody'); tb.innerHTML = '';
+  for (const c of coders) {
+    const accts = (c.agent_accounts||[]);
+    const acctHtml = accts.length
+      ? accts.map(a => `<span class="pill pill-muted" title="${esc(a)}" style="font-size:10px">${esc(a.length>20?a.slice(0,18)+'…':a)}</span>`).join(' ')
+      : '<span style="color:var(--muted)">—</span>';
+    const ips = (c.ips||[]).join(', ') || '—';
+    const tr = document.createElement('tr');
+    tr.className = 'row';
+    tr.innerHTML = `
+      <td><strong>${esc(c.coder)}</strong></td>
+      <td>${acctHtml}</td>
+      <td class="r">${(c.projects||[]).length || '<span style="color:var(--muted)">0</span>'}</td>
+      <td class="r">${c.sessions}</td>
+      <td class="r" style="color:var(--muted)">${c.prompts}</td>
+      <td class="r">${c.claude ? pill(c.claude,'pill-blue') : '<span style="color:var(--muted)">0</span>'}</td>
+      <td class="r">${c.opencode ? pill(c.opencode,'pill-orange') : '<span style="color:var(--muted)">0</span>'}</td>
+      <td class="r">${fmt(c.tokens_in)}</td>
+      <td class="r">${fmt(c.tokens_out)}</td>
+      <td class="r ${(c.simple_on_opus||0)>0?'warn':''}">${c.simple_on_opus||0}</td>
+      <td style="color:var(--muted);font-size:11px">${esc(ips)}</td>`;
+    tr.onclick = () => {
+      const p = new URLSearchParams();
+      p.set('coder', c.coder);
+      if ($('#fFrom').value) p.set('from', new Date($('#fFrom').value+'T00:00:00').toISOString());
+      if ($('#fTo').value)   p.set('to',   new Date($('#fTo').value+'T23:59:59.999').toISOString());
+      window.open('/coder.html?' + p.toString(), '_blank');
+    };
+    tb.appendChild(tr);
+  }
+}
+
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+setDefaultDates();
+apiFetch('/api/report').then(async () => {
+  showApp();
+  await initCoderList();
+  applyFilters();
+}).catch(() => showLogin());
+</script>
+</body>
+</html>

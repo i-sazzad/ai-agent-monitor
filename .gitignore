@@ -1,0 +1,20 @@
+# Secrets
+.env
+
+# Node
+node_modules/
+
+# Build output
+out/
+
+# Database and persistent data
+data/
+
+# TLS certificates
+certs/
+
+# VS Code
+.vscode/
+
+# VS Code extension packages
+*.vsix

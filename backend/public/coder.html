@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Coder Detail — Agent Monitor</title>
+  <script src="/chart.min.js"></script>
+  <style>
+    :root{
+      --bg:#0b0d12;--surface:#111520;--surface2:#161b27;--border:#1e2535;
+      --fg:#dde3f0;--muted:#5a6380;--accent:#4f8ef7;--accent2:#7b5ef7;
+      --green:#34d399;--orange:#fb923c;--red:#f87171;--yellow:#fbbf24;
+      --purple:#a78bfa;--cyan:#22d3ee;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font:13px/1.5 "Inter",system-ui,sans-serif;background:var(--bg);color:var(--fg);min-height:100vh;}
+    header{display:flex;align-items:center;gap:10px;padding:12px 20px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:100;}
+    header h1{font-size:14px;font-weight:700;}
+    .back{font-size:12px;color:var(--accent);text-decoration:none;padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);}
+    .back:hover{border-color:var(--accent);}
+    .hright{margin-left:auto;display:flex;align-items:center;gap:8px;}
+    main{padding:16px 20px;max-width:1200px;margin:0 auto;}
+
+    .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:16px;}
+    .fg{display:flex;flex-direction:column;gap:3px;}
+    .fg label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);}
+    .filters input[type=date]{height:30px;padding:0 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--fg);font:13px/1 inherit;outline:none;}
+    .filters input[type=date]:focus{border-color:var(--accent);}
+    .btn{height:30px;padding:0 14px;border-radius:6px;border:none;cursor:pointer;font:600 12px/1 inherit;}
+    .btn-primary{background:var(--accent);color:#fff;}
+    .btn-ghost{background:var(--surface2);color:var(--muted);border:1px solid var(--border);}
+
+    .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px;}
+    .kpi{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;}
+    .kpi .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:4px;}
+    .kpi .val{font-size:22px;font-weight:700;line-height:1;}
+    .kpi .sub{font-size:10px;color:var(--muted);margin-top:3px;}
+    .kpi.c-blue .val{color:var(--accent);}
+    .kpi.c-green .val{color:var(--green);}
+    .kpi.c-purple .val{color:var(--purple);}
+    .kpi.c-orange .val{color:var(--orange);}
+    .kpi.c-cyan .val{color:var(--cyan);}
+
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:12px;}
+    .ch{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+    .tbl-wrap{overflow-x:auto;}
+    table{width:100%;border-collapse:collapse;}
+    th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--border);font-size:12px;white-space:nowrap;}
+    th{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:500;}
+    .r{text-align:right;}
+    tr.row:hover{background:var(--surface2);cursor:pointer;}
+    tr.total-row{background:#0f1320;font-weight:600;}
+
+    .pill{display:inline-block;padding:1px 7px;border-radius:999px;font-size:11px;}
+    .pill-blue{background:#0e1d3a;color:var(--accent);}
+    .pill-orange{background:#201208;color:var(--orange);}
+    .pill-green{background:#0a2018;color:var(--green);}
+    .pill-red{background:#200a0a;color:var(--red);}
+    .pill-muted{background:#151a25;color:var(--muted);}
+
+
+    pre{white-space:pre-wrap;word-break:break-word;background:#070910;border:1px solid var(--border);border-radius:7px;padding:10px 12px;font-size:12px;font-family:ui-monospace,monospace;margin-top:4px;}
+    .drill-item{padding:10px 0;border-bottom:1px solid var(--border);}
+    .drill-item:last-child{border-bottom:none;}
+    .drill-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:11px;color:var(--muted);margin-bottom:6px;}
+
+    .fc-inline{margin-top:8px;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;}
+    .hidden{display:none!important;}
+    #loginWrap{max-width:400px;margin:80px auto;}
+    .login-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px 24px;}
+    .login-card h2{font-size:16px;font-weight:700;margin-bottom:6px;}
+    .login-card p{font-size:12px;color:var(--muted);margin-bottom:18px;}
+    .login-row{display:flex;gap:8px;}
+    .login-row input{flex:1;height:36px;padding:0 10px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--fg);font:13px inherit;outline:none;}
+    .login-row input:focus{border-color:var(--accent);}
+    .login-row .btn{height:36px;padding:0 18px;}
+    .err{color:var(--red);font-size:12px;min-height:18px;margin-top:8px;}
+  </style>
+</head>
+<body>
+
+<header>
+  <a href="/" class="back">← Dashboard</a>
+  <h1 id="hdrName" style="color:var(--accent)"></h1>
+  <span style="font-size:11px;color:var(--muted)" id="hdrAcct"></span>
+  <div class="hright">
+    <span id="lastRefresh" style="font-size:11px;color:var(--muted)"></span>
+    <button class="btn btn-ghost" onclick="load()">↺ Refresh</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- LOGIN -->
+  <div id="loginWrap" class="hidden">
+    <div class="login-card">
+      <h2>Sign in</h2>
+      <p>Enter your admin token to view this page.</p>
+      <div class="login-row">
+        <input id="tokenInput" type="password" placeholder="Admin token" onkeydown="if(event.key==='Enter')doLogin()"/>
+        <button class="btn btn-primary" onclick="doLogin()">Sign in</button>
+      </div>
+      <div class="err" id="loginErr"></div>
+    </div>
+  </div>
+
+  <!-- DETAIL -->
+  <div id="detail" class="hidden">
+
+    <!-- FILTER BAR -->
+    <div class="filters">
+      <div class="fg"><label>From</label><input type="date" id="fFrom"/></div>
+      <div class="fg"><label>To</label><input type="date" id="fTo"/></div>
+      <button class="btn btn-primary" onclick="load()">Apply</button>
+      <button class="btn btn-ghost" onclick="resetDates();load()">Reset</button>
+    </div>
+
+    <!-- KPI CARDS -->
+    <div class="kpis">
+      <div class="kpi c-green"><div class="lbl">Projects</div><div class="val" id="kProjects">—</div></div>
+      <div class="kpi c-blue"><div class="lbl">Sessions</div><div class="val" id="kSessions">—</div></div>
+      <div class="kpi c-cyan"><div class="lbl">Prompts</div><div class="val" id="kPrompts">—</div></div>
+      <div class="kpi c-purple"><div class="lbl">Input tokens</div><div class="val" id="kIn">—</div></div>
+      <div class="kpi c-orange"><div class="lbl">Output tokens</div><div class="val" id="kOut">—</div></div>
+    </div>
+
+    <!-- TOKEN TABLE -->
+    <div class="card">
+      <div class="ch">📊 Token spend by model</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Agent</th><th>Model</th><th class="r">Prompts</th><th class="r">Input</th><th class="r">Output</th><th class="r">Cache read</th></tr></thead>
+        <tbody id="tokenTbody"></tbody>
+      </table></div>
+    </div>
+
+    <!-- DAILY TABLE -->
+    <div class="card">
+      <div class="ch">📅 Daily activity</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Date</th><th class="r">Sessions</th><th class="r">Prompts</th><th class="r">Claude</th><th class="r">OpenCode</th><th class="r">Input tok.</th><th class="r">Output tok.</th></tr></thead>
+        <tbody id="dailyTbody"></tbody>
+      </table></div>
+    </div>
+
+    <!-- PROJECTS -->
+    <div class="card">
+      <div class="ch">📁 Projects <span style="color:var(--muted);text-transform:none;letter-spacing:0;font-size:10px">· click row → file changes</span></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Project</th><th>Path</th><th class="r">Sessions</th><th class="r">Prompts</th><th class="r">Claude</th><th class="r">OpenCode</th><th class="r">Input tok.</th><th class="r">Output tok.</th></tr></thead>
+        <tbody id="projTbody"></tbody>
+      </table></div>
+      <div id="fcWrap" class="fc-inline hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <span style="font-size:11px;color:var(--muted)">File changes — <strong id="fcProject" style="color:var(--accent)"></strong></span>
+          <button class="btn btn-ghost" style="padding:0 8px;height:22px;font-size:10px" onclick="$('#fcWrap').classList.add('hidden')">✕</button>
+        </div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>File</th><th class="r">Agent</th><th class="r">+Added</th><th class="r">−Removed</th><th class="r">Net</th></tr></thead>
+          <tbody id="fcTbody"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- PROMPTS -->
+    <div class="card">
+      <div class="ch">💬 Prompts <span id="promptCount" style="color:var(--fg);text-transform:none;letter-spacing:0;margin-left:4px"></span></div>
+      <div id="promptsBody"></div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const CODER = new URLSearchParams(location.search).get('coder') || '';
+if (!CODER) { document.title = 'Agent Monitor'; location.href = '/'; }
+document.title = `${CODER} — Agent Monitor`;
+$('#hdrName').textContent = CODER;
+const fmt = n => n == null ? '0' : n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(0)+'k' : String(n);
+const fmtDate = s => s ? new Date(s).toLocaleString() : '';
+const esc = s => (s||'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+const pill = (t,cls='pill-muted') => `<span class="pill ${cls}">${t}</span>`;
+const shortModel = m => (m||'?').replace('claude-','').replace('-20251001','');
+const MODEL_CLR = {'claude-opus-4-8':'#a78bfa','claude-opus-4-7':'#c084fc','claude-fable-5':'#f472b6','claude-sonnet-4-6':'#4f8ef7','claude-sonnet-4-5':'#60a5fa','claude-haiku-4-5-20251001':'#34d399','opencode':'#fb923c','unknown':'#5a6380'};
+const modelClr = m => MODEL_CLR[m] || '#5a6380';
+const projName = p => p === '(unknown)' ? p : (p.replace(/\\/g,'/').split('/').filter(Boolean).pop() || p);
+
+function localDateStr(d) {
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function resetDates() {
+  const today = localDateStr(new Date());
+  $('#fFrom').value = today; $('#fTo').value = today;
+}
+function buildQS() {
+  const p = new URLSearchParams();
+  if ($('#fFrom').value) p.set('from', new Date($('#fFrom').value+'T00:00:00').toISOString());
+  if ($('#fTo').value)   p.set('to',   new Date($('#fTo').value+'T23:59:59.999').toISOString());
+  return p.toString() ? '?'+p.toString() : '';
+}
+
+async function apiFetch(path) {
+  const r = await fetch(path, { credentials:'same-origin' });
+  if (r.status === 401) { showLogin(); throw new Error('unauthorized'); }
+  return r.json();
+}
+function showLogin() { $('#loginWrap').classList.remove('hidden'); $('#detail').classList.add('hidden'); }
+function showDetail() { $('#loginWrap').classList.add('hidden'); $('#detail').classList.remove('hidden'); }
+
+async function doLogin() {
+  $('#loginErr').textContent = '';
+  const r = await fetch('/login', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ token: $('#tokenInput').value }), credentials:'same-origin' });
+  if (!r.ok) { $('#loginErr').textContent = 'Invalid token.'; return; }
+  $('#tokenInput').value = '';
+  showDetail(); load();
+}
+
+let _data = null;
+
+async function load() {
+  const qs = buildQS();
+  _data = await apiFetch('/api/coder/' + encodeURIComponent(CODER) + qs);
+  render();
+  $('#lastRefresh').textContent = 'Updated ' + new Date().toLocaleTimeString();
+}
+
+function render() {
+  const d = _data;
+
+  // KPIs
+  const totalSessions = (d.daily||[]).reduce((s,r)=>s+(r.sessions||0),0);
+  const totalPrompts  = (d.daily||[]).reduce((s,r)=>s+(r.prompts||0),0);
+  const totalIn  = (d.tokens||[]).reduce((s,r)=>s+(r.tokens_in||0),0);
+  const totalOut = (d.tokens||[]).reduce((s,r)=>s+(r.tokens_out||0),0);
+  $('#kSessions').textContent = totalSessions;
+  $('#kPrompts').textContent  = totalPrompts;
+  $('#kIn').textContent  = fmt(totalIn);
+  $('#kOut').textContent = fmt(totalOut);
+  $('#kProjects').textContent  = (d.projects||[]).length;
+
+  // Show account label
+  const interactions = d.interactions || [];
+  const acct = interactions[0]?.agent_account_id || '';
+  $('#hdrAcct').textContent = acct ? `· ${acct.length>30?acct.slice(0,28)+'…':acct}` : '';
+
+  // Token table
+  const ttb = $('#tokenTbody'); ttb.innerHTML = '';
+  let tot = {s:0,ti:0,to:0,tc:0};
+  for (const r of (d.tokens||[])) {
+    tot.s+=r.sessions||0; tot.ti+=r.tokens_in||0; tot.to+=r.tokens_out||0; tot.tc+=r.tokens_cache_read||0;
+    const sm = shortModel(r.model), cl = modelClr(r.model);
+    const agLbl = r.agent==='claude_code'?'Claude':r.agent==='opencode'?'OpenCode':esc(r.agent);
+    const agCls = r.agent==='claude_code'?'pill-blue':'pill-orange';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${pill(agLbl,agCls)}</td>
+      <td><span class="pill" style="background:#0e1525;color:${cl}">${esc(sm)}</span></td>
+      <td class="r">${r.sessions}</td><td class="r">${fmt(r.tokens_in)}</td>
+      <td class="r">${fmt(r.tokens_out)}</td><td class="r">${fmt(r.tokens_cache_read)}</td>`;
+    ttb.appendChild(tr);
+  }
+  if ((d.tokens||[]).length) {
+    const tr=document.createElement('tr'); tr.className='total-row';
+    tr.innerHTML=`<td colspan="2">Total</td><td class="r">${tot.s}</td><td class="r">${fmt(tot.ti)}</td><td class="r">${fmt(tot.to)}</td><td class="r">${fmt(tot.tc)}</td>`;
+    ttb.appendChild(tr);
+  }
+
+  // Daily table
+  const dtb = $('#dailyTbody'); dtb.innerHTML = '';
+  let dtot = {s:0,pr:0,cl:0,oc:0,ti:0,to:0};
+  for (const r of (d.daily||[])) {
+    dtot.s+=r.sessions||0; dtot.pr+=r.prompts||0; dtot.cl+=r.claude||0; dtot.oc+=r.opencode||0;
+    dtot.ti+=r.tokens_in||0; dtot.to+=r.tokens_out||0;
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${esc(r.date)}</td>
+      <td class="r">${r.sessions}</td>
+      <td class="r" style="color:var(--muted)">${r.prompts||'—'}</td>
+      <td class="r">${r.claude?pill(r.claude,'pill-blue'):'<span style="color:var(--muted)">0</span>'}</td>
+      <td class="r">${r.opencode?pill(r.opencode,'pill-orange'):'<span style="color:var(--muted)">0</span>'}</td>
+      <td class="r">${fmt(r.tokens_in)}</td><td class="r">${fmt(r.tokens_out)}</td>`;
+    dtb.appendChild(tr);
+  }
+  if ((d.daily||[]).length>1) {
+    const tr=document.createElement('tr'); tr.className='total-row';
+    tr.innerHTML=`<td>Total</td><td class="r">${dtot.s}</td><td class="r" style="color:var(--muted)">${dtot.pr||'—'}</td>
+      <td class="r">${dtot.cl}</td><td class="r">${dtot.oc}</td>
+      <td class="r">${fmt(dtot.ti)}</td><td class="r">${fmt(dtot.to)}</td>`;
+    dtb.appendChild(tr);
+  }
+
+  // Projects
+  const fc = d.fileChanges || [];
+  const ptb = $('#projTbody'); ptb.innerHTML = '';
+  $('#fcWrap').classList.add('hidden');
+  for (const r of (d.projects||[])) {
+    const name = projName(r.workspace);
+    const tr = document.createElement('tr'); tr.className='row';
+    tr.innerHTML=`<td><strong>${esc(name)}</strong></td>
+      <td style="color:var(--muted);font-size:11px" title="${esc(r.workspace)}">${esc(r.workspace.length>45?r.workspace.slice(0,43)+'…':r.workspace)}</td>
+      <td class="r">${r.sessions}</td>
+      <td class="r" style="color:var(--muted)">${r.sessions}</td>
+      <td class="r">${r.claude?pill(r.claude,'pill-blue'):'<span style="color:var(--muted)">0</span>'}</td>
+      <td class="r">${r.opencode?pill(r.opencode,'pill-orange'):'<span style="color:var(--muted)">0</span>'}</td>
+      <td class="r">${fmt(r.tokens_in)}</td><td class="r">${fmt(r.tokens_out)}</td>`;
+    tr.onclick = () => showFC(r.workspace, fc);
+    ptb.appendChild(tr);
+  }
+
+  // Prompts
+  $('#promptCount').textContent = `(${interactions.length})`;
+  if (!interactions.length) { $('#promptsBody').innerHTML='<p style="color:var(--muted)">No prompts in range.</p>'; return; }
+  $('#promptsBody').innerHTML = interactions.map(i => {
+    const sm=shortModel(i.model), cl=modelClr(i.model);
+    const tc=i.task_class||'unknown';
+    const tcCls={simple:'pill-green',moderate:'pill-blue',critical:'pill-red'}[tc]||'pill-muted';
+    const acct=i.agent_account_id?pill(esc(i.agent_account_id.length>24?i.agent_account_id.slice(0,22)+'…':i.agent_account_id),'pill-muted'):'';
+    const agLbl = i.agent==='claude_code' ? pill('Claude','pill-blue') : i.agent==='opencode' ? pill('OpenCode','pill-orange') : '';
+    return `<div class="drill-item">
+      <div class="drill-meta">
+        <span>${fmtDate(i.ts)}</span>
+        ${agLbl}
+        <span class="pill" style="background:#0e1525;color:${cl}">${esc(sm)}</span>
+        ${pill(tc,tcCls)}
+        ${i.git_branch?`<span>⎇ ${esc(i.git_branch)}</span>`:''}
+        ${i.tokens_in||i.tokens_out?`<span>${fmt(i.tokens_in)}↑ ${fmt(i.tokens_out)}↓</span>`:''}
+        ${acct}
+      </div>
+      <pre>${esc(i.prompt||'(no prompt captured)')}</pre>
+    </div>`;
+  }).join('');
+}
+
+
+function showFC(workspace, fcRows) {
+  const ws = (workspace||'').toLowerCase().replace(/\\/g,'/');
+  const rows = fcRows.filter(f=>(f.workspace||'').toLowerCase().replace(/\\/g,'/')=== ws);
+  $('#fcProject').textContent = projName(workspace);
+  const tb = $('#fcTbody'); tb.innerHTML='';
+  if (!rows.length) {
+    tb.innerHTML='<tr><td colspan="5" style="color:var(--muted);padding:8px;text-align:center">No git diff data yet.</td></tr>';
+  } else {
+    for (const f of rows) {
+      const net=f.total_added-f.total_removed;
+      const hasClaude   = f.claude_added   > 0 || f.claude_removed   > 0;
+      const hasOpencode = f.opencode_added > 0 || f.opencode_removed > 0;
+      const agentLabel  = hasClaude && hasOpencode ? '<span style="color:#7c9ef8">Claude</span> + <span style="color:#f8a84b">OC</span>'
+                        : hasClaude   ? '<span style="color:#7c9ef8">Claude</span>'
+                        : hasOpencode ? '<span style="color:#f8a84b">OpenCode</span>'
+                        : '<span style="color:var(--muted)">—</span>';
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td style="font-family:ui-monospace,monospace;font-size:11px">${esc(f.file)}</td>
+        <td class="r" style="font-size:11px">${agentLabel}</td>
+        <td class="r" style="color:var(--green)">+${f.total_added}</td>
+        <td class="r" style="color:var(--red)">-${f.total_removed}</td>
+        <td class="r" style="color:${net>=0?'var(--green)':'var(--red)'}">${net>=0?'+':''}${net}</td>`;
+      tb.appendChild(tr);
+    }
+  }
+  $('#fcWrap').classList.remove('hidden');
+  $('#fcWrap').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+resetDates();
+// Pre-fill date filter from URL if passed by main dashboard
+(function() {
+  const sp = new URLSearchParams(location.search);
+  const f = sp.get('from'), t = sp.get('to');
+  if (f) $('#fFrom').value = localDateStr(new Date(f));
+  if (t) $('#fTo').value   = localDateStr(new Date(t));
+})();
+apiFetch('/api/coder/' + encodeURIComponent(CODER) + buildQS()).then(data => {
+  _data = data; showDetail(); render();
+  $('#lastRefresh').textContent = 'Updated ' + new Date().toLocaleTimeString();
+}).catch(() => showLogin());
+</script>
+</body>
+</html>

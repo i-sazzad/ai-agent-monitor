@@ -1,0 +1,18 @@
+{
+  "name": "agent-monitor-backend",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Local ingestion API + SQLite store + retention for the monitoring pipeline. Role-gated drill-down with access logging. Monitoring-only.",
+  "scripts": {
+    "compile": "tsc -p ./",
+    "start": "node out/server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.10.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0"
+  }
+}

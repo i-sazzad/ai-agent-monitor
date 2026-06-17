@@ -1,0 +1,21 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: agent-monitor
+    restart: unless-stopped
+    ports:
+      - "4319:4319"
+    volumes:
+      - agent-monitor-data:/app/data
+    environment:
+      - PORT=4319
+      - INGEST_TOKEN=${INGEST_TOKEN:-dev-ingest-token}
+      - ADMIN_TOKEN=${ADMIN_TOKEN:-dev-admin-token}
+      - RETENTION_DAYS=${RETENTION_DAYS:-90}
+    env_file:
+      - .env
+
+volumes:
+  agent-monitor-data:
